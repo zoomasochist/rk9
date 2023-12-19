@@ -1,0 +1,15 @@
+[package]
+name = "rk9"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.75"
+rusqlite = { version = "0.30.0", features = ["bundled"] }
+timeago = "0.4.2"
+tokio = { version = "1.35.0", features = ["full"] }
+env_logger = "0.10.1"
+log = "0.4.20"
+poise = { git = "https://github.com/serenity-rs/poise" }
+serde = { version = "1.0.193", features = ["derive"] }
+toml = "0.8.8"
