@@ -7,3 +7,15 @@
 # /rk9/
 
 A Discord bot for (mostly furry) gooners.
+
+## Running
+
+```shell
+$ cat >rk9.toml <<EOF
+discord_token = "<your bot token>"
+database_path = "./rk9.sqlite"
+accent_colour = 0xb4c4f9
+EOF
+$ cargo build --release
+$ target/release/rk9
+```
