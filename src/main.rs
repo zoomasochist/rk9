@@ -1,4 +1,5 @@
 #![warn(clippy::pedantic)]
+#![feature(let_chains)]
 use tokio::sync::Mutex;
 use poise::{serenity_prelude as serenity, FrameworkError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -7,13 +8,23 @@ use log::info;
 mod config;
 mod db;
 mod commands;
+mod edit_distance;
+
+pub(crate) type Context<'a> = poise::Context<'a, Data, anyhow::Error>;
 
 struct Data {
     accent_colour: u32,
+    strings: Strings,
     db: Mutex<rusqlite::Connection>,
 }
 
-pub(crate) type Context<'a> = poise::Context<'a, Data, anyhow::Error>;
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct Strings {
+    stupid_things: Vec<String>,
+    mean: Vec<String>,
+    extreme: Vec<String>,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -25,13 +36,16 @@ async fn main() -> anyhow::Result<()> {
     let commands: Vec<poise::Command<Data, anyhow::Error>> = vec![
         // Misc
         commands::help(),
+        commands::stats(),
         // Admin
         commands::configure::channel(),
         // Tracking
         commands::tracking::prejac(),
         commands::tracking::goon(),
         commands::tracking::cum(),
-        commands::tracking::stats(),
+        // Fun
+        commands::fun::prompt(),
+        commands::fun::prompt_me(),
     ];
 
     let intents = serenity::GatewayIntents::non_privileged()
@@ -46,6 +60,9 @@ async fn main() -> anyhow::Result<()> {
         .setup(move |ctx, ready, framework| Box::pin(async move {
             info!("Logged in as {}", ready.user.name);
 
+            let strings =
+                toml::from_str(&std::fs::read_to_string("strings.toml")?)?;
+
             let db = rusqlite::Connection::open(config.database_path)?;
             db::migrations(&db)?;
 
@@ -56,6 +73,7 @@ async fn main() -> anyhow::Result<()> {
             info!("Ready");
             Ok(Data {
                 accent_colour: config.accent_colour,
+                strings,
                 db: db.into()
             })
         }))
@@ -100,7 +118,11 @@ async fn error_handler(err: FrameworkError<'_, Data, anyhow::Error>) {
             let _ = ctx.send(reply).await;
             log::error!("{}", error);
         },
-        _ => log::warn!("Unmatched error"),
+        FrameworkError::Setup { error, .. } => {
+            log::error!("Couldn't initialise bot! {}", error);
+            std::process::exit(1);
+        },
+        _ => log::error!("Unmatched error"),
     }
 }
 
@@ -118,7 +140,7 @@ fn duration_string(dur: u64) -> String {
 
     // Is this stupid? I dunno
     match (seconds, minutes, hours) {
-        (0, 0, 0) => String::from("Instantly?!"),
+        (0, 0, 0) => String::from("zero"),
         (s, 0, 0) => format!("{s} seconds"),
         (0, m, 0) => format!("{m} minutes"),
         (0, 0, h) => format!("{h} hours"),
@@ -126,5 +148,18 @@ fn duration_string(dur: u64) -> String {
         (s, 0, h) => format!("{h} hours, {s} seconds"),
         (s, m, 0) => format!("{m} minutes, {s} seconds"),
         (s, m, h) => format!("{h} hours, {m} minutes, {s} seconds"),
+    }
+}
+
+fn adj_duration_string(dur: u64) -> String {
+    let seconds = dur % 60;
+    let minutes = (dur / 60) % 60;
+    let hours   = (dur / 60) / 60;
+
+    match (seconds, minutes, hours) {
+        (s, 0, 0) => format!("{s} second"),
+        (_, m, 0) => format!("{m} minute"),
+        (_, 0, h) => format!("{h} hour"),
+        (_, m, h) => format!("{h} hour, {m} minute"),
     }
 }
